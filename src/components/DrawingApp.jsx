@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Pencil, Eraser, Move } from 'lucide-react';
+import { Pencil, Eraser, Move, Trash2, Undo2, Redo2 } from 'lucide-react';
 
 const CANVAS_SIZE = 2000;
 
@@ -266,7 +266,7 @@ const DrawingApp = () => {
     if (touchMode === 'pan') return 'cursor-grab';
     return 'cursor-crosshair';
   };
-
+  
    return (
     <div className="fixed inset-0 w-screen h-screen overflow-hidden bg-gray-100">
       <div className="fixed top-4 left-4 bg-white rounded-lg shadow-lg p-2 flex gap-2 z-50">
@@ -306,17 +306,38 @@ const DrawingApp = () => {
                   }}
                 />
               ))}
+              <div className="w-8 h-8 rounded color-picker" title={`Selected color: ${color}`} onClick={()=> document.getElementById('hidden-color-picker').click()}>
+                <input className="w-8 h-8 rounded" onChange={(e)=>{
+                  setColor(e.target.value)
+                  setTool('pencil')
+                }} type="color" id="hidden-color-picker" style={{position: 'absolute ', opacity: '0', pointerEvents: 'none'}} ></input>
+              </div>       
             </div>
           </>
         )}
-        
         <div className="w-px h-8 bg-gray-200 mx-2" />
-        <button 
-          className="p-2 rounded hover:bg-blue-50"
-          onClick={clearCanvas}
-        >
-          Clear
+        <button
+              className={`p-2 rounded hover:bg-blue-50`}
+              onClick={clearCanvas}
+              title={"Clear canvas"}
+            >
+              <Trash2 className="w-4 h-4" />
         </button>
+        <button
+              className={`p-2 rounded hover:bg-blue-50`}
+              onClick={handleUndo}
+              title={"Undo"}
+            >
+              <Undo2 className="w-4 h-4" />
+        </button>
+        <button
+              className={`p-2 rounded hover:bg-blue-50 `}
+              onClick={handleRedo}
+              title={"Redo"}
+            >
+              <Redo2 className="w-4 h-4" />
+        </button>
+        <div className="w-px h-8 bg-gray-200 mx-2" />
       </div>
 
       <div

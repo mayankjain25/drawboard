@@ -1,5 +1,5 @@
-1) Ctrl + Z to undo last edit, Ctrl + Shift + Z to redo last edit
-2) Colour wheel option for pencil
+1) Ctrl + Z to undo last edit, Ctrl + Shift + Z to redo last edit [DONE]
+2) Colour wheel option for pencil [DONE]
 3) Vertical scrolling is sorted, horizontal scrolling needs to be checked  [DONE]
 4) Enable drawing only when mouse is clicked. If i want to move around the canvas, I can press middle mouse button to do so. [DONE]
 5) Clear button [DONE]

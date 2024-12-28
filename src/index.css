@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-body{
-    overscroll-behavior: contain;
+body {
+  overscroll-behavior: contain;
+}
+
+.color-picker {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  border-radius: 50%;
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+
+.color-picker::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.color-picker::-webkit-color-swatch {
+  border: none;
+  border-radius: 50%;
 }
