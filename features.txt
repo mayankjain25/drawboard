@@ -1,0 +1,11 @@
+1) Ctrl + Z to undo last edit, Ctrl + Shift + Z to redo last edit
+2) Colour wheel option for pencil
+3) Vertical scrolling is sorted, horizontal scrolling needs to be checked
+4) Enable drawing only when mouse is clicked. If i want to move around the canvas, I can press middle mouse button to do so.
+5) Clear button
+6) Dark mode 
+7) Scribbling to be persistent across reloads
+8) The drawing tool can be draggable
+9) The drawing tool can have varying opacity
+10) The drawing tool can auto hide if no activity is being detected
+11) Can we have different types of pens?
