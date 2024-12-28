@@ -14,8 +14,63 @@ const DrawingApp = () => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const panStart = useRef({ x: 0, y: 0 });
+  const [history, setHistory] = useState([]); // History of chunks
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState(-1); // Current position in history
 
   const colors = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF'];
+
+  // const getChunkKey = (x, y) => `${x},${y}`;
+
+  const cloneChunks = (chunksMap) => {
+    const cloned = new Map();
+    chunksMap.forEach((chunk, key) => {
+      const clonedCanvas = document.createElement('canvas');
+      clonedCanvas.width = chunk.canvas.width;
+      clonedCanvas.height = chunk.canvas.height;
+      clonedCanvas.getContext('2d').drawImage(chunk.canvas, 0, 0);
+      cloned.set(key, { ...chunk, canvas: clonedCanvas });
+    });
+    return cloned;
+  };
+
+  const saveToHistory = (newChunks) => {
+    const historyCopy = history.slice(0, currentHistoryIndex + 1);
+    historyCopy.push(cloneChunks(newChunks));
+    setHistory(historyCopy);
+    setCurrentHistoryIndex(historyCopy.length - 1);
+  };
+
+  const handleUndo = () => {
+    if (currentHistoryIndex > 0) {
+      setChunks(cloneChunks(history[currentHistoryIndex - 1]));
+      setCurrentHistoryIndex(currentHistoryIndex - 1);
+    }
+  };
+
+  const handleRedo = () => {
+    if (currentHistoryIndex < history.length - 1) {
+      setChunks(cloneChunks(history[currentHistoryIndex + 1]));
+      setCurrentHistoryIndex(currentHistoryIndex + 1);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          handleRedo();
+        } else {
+          handleUndo();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [currentHistoryIndex, history]);
 
   const clearCanvas = () => {
     const newChunks = new Map(chunks);
@@ -25,6 +80,7 @@ const DrawingApp = () => {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     });
+    saveToHistory(newChunks);
     setChunks(newChunks);
   };
 
@@ -139,7 +195,10 @@ const DrawingApp = () => {
     if (isDrawing) {
       const currentX = e.clientX - viewport.x;
       const currentY = e.clientY - viewport.y;
+      // const newChunks = cloneChunks(chunks);
       draw(currentX, currentY);
+      // setChunks(newChunks);
+      // setPosition({ x: e.clientX, y: e.clientY });
     }
 
     if (panStart.current.x !== 0 || panStart.current.y !== 0) {
@@ -152,6 +211,7 @@ const DrawingApp = () => {
 
   const handleMouseUp = () => {
     setIsDrawing(false);
+    saveToHistory(chunks)
     panStart.current = { x: 0, y: 0 }; // Reset pan position
   };
 
@@ -207,7 +267,7 @@ const DrawingApp = () => {
     return 'cursor-crosshair';
   };
 
-  return (
+   return (
     <div className="fixed inset-0 w-screen h-screen overflow-hidden bg-gray-100">
       <div className="fixed top-4 left-4 bg-white rounded-lg shadow-lg p-2 flex gap-2 z-50">
         <button
