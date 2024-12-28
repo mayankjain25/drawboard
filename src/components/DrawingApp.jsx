@@ -2,19 +2,19 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Pencil, Eraser, Move } from 'lucide-react';
 
 const CANVAS_SIZE = 2000;
-const CHUNK_LOAD_THRESHOLD = 500;
 
 const DrawingApp = () => {
   const [chunks, setChunks] = useState(new Map());
-  const [isDrawing, setIsDrawing] = useState(false);
-  const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [tool, setTool] = useState('pencil');
   const [color, setColor] = useState('#000000');
+  const [isDrawing, setIsDrawing] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [viewport, setViewport] = useState({ x: 0, y: 0 });
   const [touchMode, setTouchMode] = useState('draw'); // 'draw' or 'pan'
+  const [viewport, setViewport] = useState({ x: 0, y: 0 });
   const containerRef = useRef(null);
+  const canvasRef = useRef(null);
+  const panStart = useRef({ x: 0, y: 0 });
+
   const colors = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF'];
 
   const clearCanvas = () => {
@@ -27,27 +27,6 @@ const DrawingApp = () => {
     });
     setChunks(newChunks);
   };
-
-
-  // Disables standard touch actions on browser (long press, swipe to refresh etc)
-  useEffect(() => {
-    const preventDefaultActions = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-  
-    // Disable touch actions (long press, swipe to refresh, etc.)
-    document.addEventListener('touchstart', preventDefaultActions, { passive: false });
-    document.addEventListener('touchmove', preventDefaultActions, { passive: false });
-    document.addEventListener('contextmenu', preventDefaultActions);
-  
-    // Clean up the event listeners when the component is unmounted
-    return () => {
-      document.removeEventListener('touchstart', preventDefaultActions);
-      document.removeEventListener('touchmove', preventDefaultActions);
-      document.removeEventListener('contextmenu', preventDefaultActions);
-    };
-  }, []);
 
   const getChunkCoords = (x, y) => ({
     chunkX: Math.floor(x / CANVAS_SIZE),
@@ -98,7 +77,7 @@ const DrawingApp = () => {
     }
   };
 
-  const loadChunksAroundViewport = () => {
+  const loadChunksAroundViewport = useCallback(() => {
     const visibleChunks = getChunkCoords(-viewport.x, -viewport.y);
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
@@ -111,105 +90,69 @@ const DrawingApp = () => {
         ensureChunk(visibleChunks.chunkX + x, visibleChunks.chunkY + y);
       }
     }
-  };
+  }, [chunks, viewport]);
 
   useEffect(() => {
     loadChunksAroundViewport();
-  }, [viewport]);
+  }, [viewport, loadChunksAroundViewport]);
 
   const draw = (currentX, currentY) => {
-    if (isDrawing) {
-      const { chunkX: startChunkX, chunkY: startChunkY } = getChunkCoords(position.x, position.y);
-      const { chunkX: endChunkX, chunkY: endChunkY } = getChunkCoords(currentX, currentY);
-      
-      ensureChunk(startChunkX, startChunkY);
-      ensureChunk(endChunkX, endChunkY);
-  
-      chunks.forEach(chunk => {
-        if ((position.x >= chunk.x && position.x <= chunk.x + CANVAS_SIZE &&
-            position.y >= chunk.y && position.y <= chunk.y + CANVAS_SIZE) ||
-            (currentX >= chunk.x && currentX <= chunk.x + CANVAS_SIZE &&
-            currentY >= chunk.y && currentY <= chunk.y + CANVAS_SIZE)) {
-          const ctx = chunk.canvas.getContext('2d');
-          ctx.beginPath();
-          ctx.moveTo(position.x - chunk.x, position.y - chunk.y);
-          ctx.lineTo(currentX - chunk.x, currentY - chunk.y);
-          ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
-          ctx.lineWidth = tool === 'eraser' ? 20 : 2;
-          ctx.lineCap = 'round';
-          ctx.lineJoin = 'round';
-          ctx.stroke();
-        }
-      });
-  
-      setPosition({ x: currentX, y: currentY });
-    }
+    const { chunkX: startChunkX, chunkY: startChunkY } = getChunkCoords(position.x, position.y);
+    const { chunkX: endChunkX, chunkY: endChunkY } = getChunkCoords(currentX, currentY);
+
+    ensureChunk(startChunkX, startChunkY);
+    ensureChunk(endChunkX, endChunkY);
+
+    chunks.forEach(chunk => {
+      if ((position.x >= chunk.x && position.x <= chunk.x + CANVAS_SIZE &&
+          position.y >= chunk.y && position.y <= chunk.y + CANVAS_SIZE) ||
+          (currentX >= chunk.x && currentX <= chunk.x + CANVAS_SIZE &&
+          currentY >= chunk.y && currentY <= chunk.y + CANVAS_SIZE)) {
+        const ctx = chunk.canvas.getContext('2d');
+        ctx.beginPath();
+        ctx.moveTo(position.x - chunk.x, position.y - chunk.y);
+        ctx.lineTo(currentX - chunk.x, currentY - chunk.y);
+        ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
+        ctx.lineWidth = tool === 'eraser' ? 20 : 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
+    });
+
+    setPosition({ x: currentX, y: currentY });
   };
 
-
-  // Throttle the draw calls to reduce excessive updates
-let drawingTimeout;
-const throttledDraw = (currentX, currentY) => {
-  if (drawingTimeout) clearTimeout(drawingTimeout);
-  drawingTimeout = setTimeout(() => {
-    draw(currentX, currentY);
-  }, 16); // 16ms to match ~60Hz refresh rate
-};
-
   const handleMouseDown = (e) => {
-    if (e.button === 1) {
+    if (e.button === 0) { // Left mouse button (drawing)
+      const x = e.clientX - viewport.x;
+      const y = e.clientY - viewport.y;
+      setIsDrawing(true);
+      setPosition({ x, y });
+    } else if (e.button === 1) { // Middle mouse button (pan)
       e.preventDefault();
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
-      return;
-    }
-
-    if (e.button === 0) {
-      if (touchMode === 'pan') {
-        setIsPanning(true);
-        setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
-      } else {
-        const x = e.clientX - viewport.x;
-        const y = e.clientY - viewport.y;
-        setIsDrawing(true);
-        setPosition({ x, y });
-      }
+      panStart.current = { x: e.clientX - viewport.x, y: e.clientY - viewport.y };
     }
   };
 
   const handleMouseMove = (e) => {
-    if (isPanning) {
-      const dx = e.clientX - panStart.x;
-      const dy = e.clientY - panStart.y;
-      setViewport({ x: dx, y: dy });
-      return;
-    }
-  
-    if (isDrawing && touchMode === 'draw') {
+    if (isDrawing) {
       const currentX = e.clientX - viewport.x;
       const currentY = e.clientY - viewport.y;
-      throttledDraw(currentX, currentY); // Throttle the drawing
+      draw(currentX, currentY);
     }
-  };
-  
-  const handleTouchMove = (e) => {
-    e.preventDefault();  // Prevent scroll while drawing
-    const touch = e.touches[0];
-    if (touchMode === 'draw' && isDrawing) {
-      const pos = getTouchPos(touch);
-      throttledDraw(pos.x, pos.y); // Throttle the drawing
-    } else if (touchMode === 'pan' && isPanning) {
-      const dx = touch.clientX - panStart.x;
-      const dy = touch.clientY - panStart.y;
-      setViewport({ x: dx, y: dy });
+
+    if (panStart.current.x !== 0 || panStart.current.y !== 0) {
+      const dx = e.clientX - panStart.current.x;
+      const dy = e.clientY - panStart.current.y;
+      const newViewport = { x: dx, y: dy };
+      setViewport(newViewport); // Update viewport to move canvas
     }
   };
 
-  const handleMouseUp = (e) => {
-    if (e.button === 1 || e.button === 0) {
-      setIsPanning(false);
-      setIsDrawing(false);
-    }
+  const handleMouseUp = () => {
+    setIsDrawing(false);
+    panStart.current = { x: 0, y: 0 }; // Reset pan position
   };
 
   const getTouchPos = (touch) => ({
@@ -220,24 +163,35 @@ const throttledDraw = (currentX, currentY) => {
   const handleTouchStart = (e) => {
     e.preventDefault();
     const touch = e.touches[0];
-    
     if (touchMode === 'draw') {
       const pos = getTouchPos(touch);
       setIsDrawing(true);
       setPosition(pos);
     } else {
-      setIsPanning(true);
-      setPanStart({ 
+      panStart.current = { 
         x: touch.clientX - viewport.x,
         y: touch.clientY - viewport.y
-      });
+      };
     }
   };
 
+  const handleTouchMove = (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    if (touchMode === 'draw' && isDrawing) {
+      const pos = getTouchPos(touch);
+      draw(pos.x, pos.y);
+    } else if (touchMode === 'pan' && panStart.current.x !== 0 && panStart.current.y !== 0) {
+      const dx = touch.clientX - panStart.current.x;
+      const dy = touch.clientY - panStart.current.y;
+      const newViewport = { x: dx, y: dy };
+      setViewport(newViewport); // Update viewport to move canvas
+    }
+  };
 
   const handleTouchEnd = () => {
     setIsDrawing(false);
-    setIsPanning(false);
+    panStart.current = { x: 0, y: 0 }; // Reset pan position
   };
 
   const handleWheel = (e) => {
@@ -249,7 +203,7 @@ const throttledDraw = (currentX, currentY) => {
   };
 
   const getCursorStyle = () => {
-    if (touchMode === 'pan' || isPanning) return 'cursor-grab';
+    if (touchMode === 'pan') return 'cursor-grab';
     return 'cursor-crosshair';
   };
 
@@ -305,24 +259,21 @@ const throttledDraw = (currentX, currentY) => {
         </button>
       </div>
 
-      <div 
-        ref={containerRef}
+      <div
         className={`absolute inset-0 overflow-hidden bg-white ${getCursorStyle()}`}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={() => {
-          setIsDrawing(false);
-          setIsPanning(false);
-        }}
+        onMouseLeave={() => setIsDrawing(false)}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onWheel={handleWheel}
         onContextMenu={(e) => e.preventDefault()}
+        ref={containerRef}
       >
-        <div 
-          style={{ 
+        <div
+          style={{
             transform: `translate(${viewport.x}px, ${viewport.y}px)`,
             position: 'absolute',
             top: 0,

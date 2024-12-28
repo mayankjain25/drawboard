@@ -1,8 +1,8 @@
 1) Ctrl + Z to undo last edit, Ctrl + Shift + Z to redo last edit
 2) Colour wheel option for pencil
-3) Vertical scrolling is sorted, horizontal scrolling needs to be checked
-4) Enable drawing only when mouse is clicked. If i want to move around the canvas, I can press middle mouse button to do so.
-5) Clear button
+3) Vertical scrolling is sorted, horizontal scrolling needs to be checked  [DONE]
+4) Enable drawing only when mouse is clicked. If i want to move around the canvas, I can press middle mouse button to do so. [DONE]
+5) Clear button [DONE]
 6) Dark mode 
 7) Scribbling to be persistent across reloads
 8) The drawing tool can be draggable
@@ -15,3 +15,5 @@
 15) Add a Google sign in before being able to start editing
 16) Export canvas as PDF
 17) Hero section before loading the canvas
+18) Varying pen thickness in toolbar
+19) Fill color option in toolbar
