@@ -14,6 +14,18 @@ const DrawingApp = () => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [viewport, setViewport] = useState({ x: 0, y: 0 });
   const containerRef = useRef(null);
+
+  const clearCanvas = () => {
+    console.log("Clear clicked")
+    const newChunks = new Map(chunks);
+    newChunks.forEach((chunk) => {
+        const ctx = chunk.canvas.getContext('2d');
+        ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE); // Clear the chunk canvas
+        ctx.fillStyle = '#ffffff'; // Fill with white background
+        ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE); // Reset to white background
+    });
+    setChunks(newChunks); // Update state with cleared chunks
+  }
   
   const colors = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF'];
 
@@ -196,6 +208,9 @@ const DrawingApp = () => {
               }}
             />
           ))}
+        </div>
+        <div>
+            <button className="p-2 rounded hover:bg-blue-50" onClick={clearCanvas}>Clear</button>
         </div>
       </div>
 

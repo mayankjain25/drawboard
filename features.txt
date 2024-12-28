@@ -13,3 +13,4 @@
 13) Add Shapes
 14) Ability to paste images
 15) Add a Google sign in before being able to start editing
+16) Export canvas as PDF
