@@ -9,3 +9,7 @@
 9) The drawing tool can have varying opacity
 10) The drawing tool can auto hide if no activity is being detected
 11) Can we have different types of pens?
+12) Zoom in / zoom out functionality
+13) Add Shapes
+14) Ability to paste images
+15) Add a Google sign in before being able to start editing

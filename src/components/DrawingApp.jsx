@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Pencil, Eraser } from 'lucide-react';
 
-const CANVAS_SIZE = 2000; // Size of each canvas chunk
-const CHUNK_LOAD_THRESHOLD = 500; // Distance from edge to load new chunks
+const CANVAS_SIZE = 2000;
+const CHUNK_LOAD_THRESHOLD = 500;
 
 const DrawingApp = () => {
   const [chunks, setChunks] = useState(new Map());
   const [isDrawing, setIsDrawing] = useState(false);
+  const [isPanning, setIsPanning] = useState(false);
+  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [tool, setTool] = useState('pencil');
   const [color, setColor] = useState('#000000');
   const [position, setPosition] = useState({ x: 0, y: 0 });
@@ -15,27 +17,23 @@ const DrawingApp = () => {
   
   const colors = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF'];
 
-  // Get chunk coordinates from position
+  // Previous chunk management functions remain the same
   const getChunkCoords = (x, y) => ({
     chunkX: Math.floor(x / CANVAS_SIZE),
     chunkY: Math.floor(y / CANVAS_SIZE),
   });
 
-  // Get chunk key from coordinates
   const getChunkKey = (chunkX, chunkY) => `${chunkX},${chunkY}`;
 
-  // Initialize a new chunk
   const initChunk = (chunkX, chunkY) => {
     const canvas = document.createElement('canvas');
     canvas.width = CANVAS_SIZE;
     canvas.height = CANVAS_SIZE;
     const ctx = canvas.getContext('2d');
     
-    // Fill with white background
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     
-    // Draw grid
     ctx.strokeStyle = '#f0f0f0';
     ctx.lineWidth = 1;
     
@@ -60,7 +58,6 @@ const DrawingApp = () => {
     };
   };
 
-  // Ensure chunk exists
   const ensureChunk = (chunkX, chunkY) => {
     const key = getChunkKey(chunkX, chunkY);
     if (!chunks.has(key)) {
@@ -70,7 +67,6 @@ const DrawingApp = () => {
     }
   };
 
-  // Load chunks around current viewport
   const loadChunksAroundViewport = () => {
     const visibleChunks = getChunkCoords(-viewport.x, -viewport.y);
     const viewportWidth = window.innerWidth;
@@ -90,51 +86,70 @@ const DrawingApp = () => {
     loadChunksAroundViewport();
   }, [viewport]);
 
-  const startDrawing = (e) => {
-    const x = e.clientX - viewport.x;
-    const y = e.clientY - viewport.y;
-    setIsDrawing(true);
-    setPosition({ x, y });
+  // Handle mouse events for both drawing and panning
+  const handleMouseDown = (e) => {
+    // Middle mouse button (button 1)
+    if (e.button === 1) {
+      e.preventDefault();
+      setIsPanning(true);
+      setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
+      return;
+    }
+
+    // Left mouse button (button 0) for drawing
+    if (e.button === 0 && !isPanning) {
+      const x = e.clientX - viewport.x;
+      const y = e.clientY - viewport.y;
+      setIsDrawing(true);
+      setPosition({ x, y });
+    }
   };
 
-  const draw = (e) => {
-    if (!isDrawing) return;
+  const handleMouseMove = (e) => {
+    if (isPanning) {
+      const dx = e.clientX - panStart.x;
+      const dy = e.clientY - panStart.y;
+      setViewport({ x: dx, y: dy });
+      return;
+    }
 
-    const currentX = e.clientX - viewport.x;
-    const currentY = e.clientY - viewport.y;
+    if (isDrawing) {
+      const currentX = e.clientX - viewport.x;
+      const currentY = e.clientY - viewport.y;
 
-    // Get chunk coordinates for current position
-    const { chunkX: startChunkX, chunkY: startChunkY } = getChunkCoords(position.x, position.y);
-    const { chunkX: endChunkX, chunkY: endChunkY } = getChunkCoords(currentX, currentY);
+      const { chunkX: startChunkX, chunkY: startChunkY } = getChunkCoords(position.x, position.y);
+      const { chunkX: endChunkX, chunkY: endChunkY } = getChunkCoords(currentX, currentY);
 
-    // Ensure all needed chunks exist
-    ensureChunk(startChunkX, startChunkY);
-    ensureChunk(endChunkX, endChunkY);
+      ensureChunk(startChunkX, startChunkY);
+      ensureChunk(endChunkX, endChunkY);
 
-    // Draw line on all affected chunks
-    const drawOnChunk = (chunk, startX, startY, endX, endY) => {
-      const ctx = chunk.canvas.getContext('2d');
-      ctx.beginPath();
-      ctx.moveTo(startX - chunk.x, startY - chunk.y);
-      ctx.lineTo(endX - chunk.x, endY - chunk.y);
-      ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
-      ctx.lineWidth = tool === 'eraser' ? 20 : 2;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.stroke();
-    };
+      chunks.forEach(chunk => {
+        if (position.x >= chunk.x && position.x <= chunk.x + CANVAS_SIZE &&
+            position.y >= chunk.y && position.y <= chunk.y + CANVAS_SIZE ||
+            currentX >= chunk.x && currentX <= chunk.x + CANVAS_SIZE &&
+            currentY >= chunk.y && currentY <= chunk.y + CANVAS_SIZE) {
+          const ctx = chunk.canvas.getContext('2d');
+          ctx.beginPath();
+          ctx.moveTo(position.x - chunk.x, position.y - chunk.y);
+          ctx.lineTo(currentX - chunk.x, currentY - chunk.y);
+          ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
+          ctx.lineWidth = tool === 'eraser' ? 20 : 2;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
+      });
 
-    // Draw on all affected chunks
-    chunks.forEach(chunk => {
-      if (position.x >= chunk.x && position.x <= chunk.x + CANVAS_SIZE &&
-          position.y >= chunk.y && position.y <= chunk.y + CANVAS_SIZE ||
-          currentX >= chunk.x && currentX <= chunk.x + CANVAS_SIZE &&
-          currentY >= chunk.y && currentY <= chunk.y + CANVAS_SIZE) {
-        drawOnChunk(chunk, position.x, position.y, currentX, currentY);
-      }
-    });
+      setPosition({ x: currentX, y: currentY });
+    }
+  };
 
-    setPosition({ x: currentX, y: currentY });
+  const handleMouseUp = (e) => {
+    if (e.button === 1) {
+      setIsPanning(false);
+    } else if (e.button === 0) {
+      setIsDrawing(false);
+    }
   };
 
   const handleWheel = (e) => {
@@ -143,6 +158,12 @@ const DrawingApp = () => {
       x: prev.x - e.deltaX,
       y: prev.y - e.deltaY,
     }));
+  };
+
+  // Get the appropriate cursor style
+  const getCursorStyle = () => {
+    if (isPanning) return 'cursor-grab';
+    return 'cursor-crosshair';
   };
 
   return (
@@ -181,12 +202,16 @@ const DrawingApp = () => {
       {/* Canvas Container */}
       <div 
         ref={containerRef}
-        className="absolute inset-0 overflow-hidden bg-white"
-        onMouseDown={startDrawing}
-        onMouseMove={draw}
-        onMouseUp={() => setIsDrawing(false)}
-        onMouseLeave={() => setIsDrawing(false)}
+        className={`absolute inset-0 overflow-hidden bg-white ${getCursorStyle()}`}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={() => {
+          setIsDrawing(false);
+          setIsPanning(false);
+        }}
         onWheel={handleWheel}
+        onContextMenu={(e) => e.preventDefault()} // Prevent right-click menu
       >
         <div 
           style={{ 
