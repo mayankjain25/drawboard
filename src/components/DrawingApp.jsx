@@ -28,6 +28,27 @@ const DrawingApp = () => {
     setChunks(newChunks);
   };
 
+
+  // Disables standard touch actions on browser (long press, swipe to refresh etc)
+  useEffect(() => {
+    const preventDefaultActions = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+  
+    // Disable touch actions (long press, swipe to refresh, etc.)
+    document.addEventListener('touchstart', preventDefaultActions, { passive: false });
+    document.addEventListener('touchmove', preventDefaultActions, { passive: false });
+    document.addEventListener('contextmenu', preventDefaultActions);
+  
+    // Clean up the event listeners when the component is unmounted
+    return () => {
+      document.removeEventListener('touchstart', preventDefaultActions);
+      document.removeEventListener('touchmove', preventDefaultActions);
+      document.removeEventListener('contextmenu', preventDefaultActions);
+    };
+  }, []);
+
   const getChunkCoords = (x, y) => ({
     chunkX: Math.floor(x / CANVAS_SIZE),
     chunkY: Math.floor(y / CANVAS_SIZE),
@@ -97,31 +118,43 @@ const DrawingApp = () => {
   }, [viewport]);
 
   const draw = (currentX, currentY) => {
-    const { chunkX: startChunkX, chunkY: startChunkY } = getChunkCoords(position.x, position.y);
-    const { chunkX: endChunkX, chunkY: endChunkY } = getChunkCoords(currentX, currentY);
-
-    ensureChunk(startChunkX, startChunkY);
-    ensureChunk(endChunkX, endChunkY);
-
-    chunks.forEach(chunk => {
-      if ((position.x >= chunk.x && position.x <= chunk.x + CANVAS_SIZE &&
-          position.y >= chunk.y && position.y <= chunk.y + CANVAS_SIZE) ||
-          (currentX >= chunk.x && currentX <= chunk.x + CANVAS_SIZE &&
-          currentY >= chunk.y && currentY <= chunk.y + CANVAS_SIZE)) {
-        const ctx = chunk.canvas.getContext('2d');
-        ctx.beginPath();
-        ctx.moveTo(position.x - chunk.x, position.y - chunk.y);
-        ctx.lineTo(currentX - chunk.x, currentY - chunk.y);
-        ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
-        ctx.lineWidth = tool === 'eraser' ? 20 : 2;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-      }
-    });
-
-    setPosition({ x: currentX, y: currentY });
+    if (isDrawing) {
+      const { chunkX: startChunkX, chunkY: startChunkY } = getChunkCoords(position.x, position.y);
+      const { chunkX: endChunkX, chunkY: endChunkY } = getChunkCoords(currentX, currentY);
+      
+      ensureChunk(startChunkX, startChunkY);
+      ensureChunk(endChunkX, endChunkY);
+  
+      chunks.forEach(chunk => {
+        if ((position.x >= chunk.x && position.x <= chunk.x + CANVAS_SIZE &&
+            position.y >= chunk.y && position.y <= chunk.y + CANVAS_SIZE) ||
+            (currentX >= chunk.x && currentX <= chunk.x + CANVAS_SIZE &&
+            currentY >= chunk.y && currentY <= chunk.y + CANVAS_SIZE)) {
+          const ctx = chunk.canvas.getContext('2d');
+          ctx.beginPath();
+          ctx.moveTo(position.x - chunk.x, position.y - chunk.y);
+          ctx.lineTo(currentX - chunk.x, currentY - chunk.y);
+          ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
+          ctx.lineWidth = tool === 'eraser' ? 20 : 2;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          ctx.stroke();
+        }
+      });
+  
+      setPosition({ x: currentX, y: currentY });
+    }
   };
+
+
+  // Throttle the draw calls to reduce excessive updates
+let drawingTimeout;
+const throttledDraw = (currentX, currentY) => {
+  if (drawingTimeout) clearTimeout(drawingTimeout);
+  drawingTimeout = setTimeout(() => {
+    draw(currentX, currentY);
+  }, 16); // 16ms to match ~60Hz refresh rate
+};
 
   const handleMouseDown = (e) => {
     if (e.button === 1) {
@@ -151,11 +184,24 @@ const DrawingApp = () => {
       setViewport({ x: dx, y: dy });
       return;
     }
-
+  
     if (isDrawing && touchMode === 'draw') {
       const currentX = e.clientX - viewport.x;
       const currentY = e.clientY - viewport.y;
-      draw(currentX, currentY);
+      throttledDraw(currentX, currentY); // Throttle the drawing
+    }
+  };
+  
+  const handleTouchMove = (e) => {
+    e.preventDefault();  // Prevent scroll while drawing
+    const touch = e.touches[0];
+    if (touchMode === 'draw' && isDrawing) {
+      const pos = getTouchPos(touch);
+      throttledDraw(pos.x, pos.y); // Throttle the drawing
+    } else if (touchMode === 'pan' && isPanning) {
+      const dx = touch.clientX - panStart.x;
+      const dy = touch.clientY - panStart.y;
+      setViewport({ x: dx, y: dy });
     }
   };
 
@@ -188,19 +234,6 @@ const DrawingApp = () => {
     }
   };
 
-  const handleTouchMove = (e) => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    
-    if (touchMode === 'draw' && isDrawing) {
-      const pos = getTouchPos(touch);
-      draw(pos.x, pos.y);
-    } else if (touchMode === 'pan' && isPanning) {
-      const dx = touch.clientX - panStart.x;
-      const dy = touch.clientY - panStart.y;
-      setViewport({ x: dx, y: dy });
-    }
-  };
 
   const handleTouchEnd = () => {
     setIsDrawing(false);
