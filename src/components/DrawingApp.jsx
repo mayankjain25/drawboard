@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Pencil, Eraser, Move } from 'lucide-react';
 
 const CANVAS_SIZE = 2000;
@@ -124,7 +124,6 @@ const DrawingApp = () => {
   };
 
   const handleMouseDown = (e) => {
-    // Middle mouse button (button 1) always triggers panning regardless of mode
     if (e.button === 1) {
       e.preventDefault();
       setIsPanning(true);
@@ -132,14 +131,11 @@ const DrawingApp = () => {
       return;
     }
 
-    // Left mouse button (button 0)
     if (e.button === 0) {
       if (touchMode === 'pan') {
-        // In pan mode, left click also pans
         setIsPanning(true);
         setPanStart({ x: e.clientX - viewport.x, y: e.clientY - viewport.y });
       } else {
-        // In draw mode, left click draws
         const x = e.clientX - viewport.x;
         const y = e.clientY - viewport.y;
         setIsDrawing(true);
