@@ -1,64 +1,98 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Pencil, Eraser } from 'lucide-react';
 
+const CANVAS_SIZE = 2000; // Size of each canvas chunk
+const CHUNK_LOAD_THRESHOLD = 500; // Distance from edge to load new chunks
+
 const DrawingApp = () => {
-  const canvasRef = useRef(null);
+  const [chunks, setChunks] = useState(new Map());
   const [isDrawing, setIsDrawing] = useState(false);
   const [tool, setTool] = useState('pencil');
   const [color, setColor] = useState('#000000');
   const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [viewportOffset, setViewportOffset] = useState({ x: 0, y: 0 });
-
+  const [viewport, setViewport] = useState({ x: 0, y: 0 });
+  const containerRef = useRef(null);
+  
   const colors = ['#000000', '#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF'];
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
+  // Get chunk coordinates from position
+  const getChunkCoords = (x, y) => ({
+    chunkX: Math.floor(x / CANVAS_SIZE),
+    chunkY: Math.floor(y / CANVAS_SIZE),
+  });
+
+  // Get chunk key from coordinates
+  const getChunkKey = (chunkX, chunkY) => `${chunkX},${chunkY}`;
+
+  // Initialize a new chunk
+  const initChunk = (chunkX, chunkY) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = CANVAS_SIZE;
+    canvas.height = CANVAS_SIZE;
     const ctx = canvas.getContext('2d');
-
-    // Set canvas size to be 3x the viewport size
-    canvas.width = window.innerWidth * 3;
-    canvas.height = window.innerHeight * 3;
-
-    // Center the viewport
-    setViewportOffset({
-      x: -window.innerWidth,
-      y: -window.innerHeight
-    });
-
-    // Set initial styles
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
     
     // Fill with white background
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+    ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    
     // Draw grid
     ctx.strokeStyle = '#f0f0f0';
     ctx.lineWidth = 1;
-    const gridSize = 50;
-
-    for (let x = 0; x < canvas.width; x += gridSize) {
+    
+    for (let x = 0; x < CANVAS_SIZE; x += 50) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
-      ctx.lineTo(x, canvas.height);
+      ctx.lineTo(x, CANVAS_SIZE);
       ctx.stroke();
     }
-
-    for (let y = 0; y < canvas.height; y += gridSize) {
+    
+    for (let y = 0; y < CANVAS_SIZE; y += 50) {
       ctx.beginPath();
       ctx.moveTo(0, y);
-      ctx.lineTo(canvas.width, y);
+      ctx.lineTo(CANVAS_SIZE, y);
       ctx.stroke();
     }
-  }, []);
+
+    return {
+      canvas,
+      x: chunkX * CANVAS_SIZE,
+      y: chunkY * CANVAS_SIZE,
+    };
+  };
+
+  // Ensure chunk exists
+  const ensureChunk = (chunkX, chunkY) => {
+    const key = getChunkKey(chunkX, chunkY);
+    if (!chunks.has(key)) {
+      const newChunks = new Map(chunks);
+      newChunks.set(key, initChunk(chunkX, chunkY));
+      setChunks(newChunks);
+    }
+  };
+
+  // Load chunks around current viewport
+  const loadChunksAroundViewport = () => {
+    const visibleChunks = getChunkCoords(-viewport.x, -viewport.y);
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    const chunksX = Math.ceil(viewportWidth / CANVAS_SIZE) + 2;
+    const chunksY = Math.ceil(viewportHeight / CANVAS_SIZE) + 2;
+    
+    for (let x = -1; x < chunksX; x++) {
+      for (let y = -1; y < chunksY; y++) {
+        ensureChunk(visibleChunks.chunkX + x, visibleChunks.chunkY + y);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadChunksAroundViewport();
+  }, [viewport]);
 
   const startDrawing = (e) => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
+    const x = e.clientX - viewport.x;
+    const y = e.clientY - viewport.y;
     setIsDrawing(true);
     setPosition({ x, y });
   };
@@ -66,31 +100,48 @@ const DrawingApp = () => {
   const draw = (e) => {
     if (!isDrawing) return;
 
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const currentX = e.clientX - viewport.x;
+    const currentY = e.clientY - viewport.y;
 
-    ctx.beginPath();
-    ctx.moveTo(position.x, position.y);
-    ctx.lineTo(x, y);
-    ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
-    ctx.lineWidth = tool === 'eraser' ? 20 : 2;
-    ctx.stroke();
+    // Get chunk coordinates for current position
+    const { chunkX: startChunkX, chunkY: startChunkY } = getChunkCoords(position.x, position.y);
+    const { chunkX: endChunkX, chunkY: endChunkY } = getChunkCoords(currentX, currentY);
 
-    setPosition({ x, y });
-  };
+    // Ensure all needed chunks exist
+    ensureChunk(startChunkX, startChunkY);
+    ensureChunk(endChunkX, endChunkY);
 
-  const stopDrawing = () => {
-    setIsDrawing(false);
+    // Draw line on all affected chunks
+    const drawOnChunk = (chunk, startX, startY, endX, endY) => {
+      const ctx = chunk.canvas.getContext('2d');
+      ctx.beginPath();
+      ctx.moveTo(startX - chunk.x, startY - chunk.y);
+      ctx.lineTo(endX - chunk.x, endY - chunk.y);
+      ctx.strokeStyle = tool === 'eraser' ? '#ffffff' : color;
+      ctx.lineWidth = tool === 'eraser' ? 20 : 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+    };
+
+    // Draw on all affected chunks
+    chunks.forEach(chunk => {
+      if (position.x >= chunk.x && position.x <= chunk.x + CANVAS_SIZE &&
+          position.y >= chunk.y && position.y <= chunk.y + CANVAS_SIZE ||
+          currentX >= chunk.x && currentX <= chunk.x + CANVAS_SIZE &&
+          currentY >= chunk.y && currentY <= chunk.y + CANVAS_SIZE) {
+        drawOnChunk(chunk, position.x, position.y, currentX, currentY);
+      }
+    });
+
+    setPosition({ x: currentX, y: currentY });
   };
 
   const handleWheel = (e) => {
     e.preventDefault();
-    setViewportOffset(prev => ({
+    setViewport(prev => ({
       x: prev.x - e.deltaX,
-      y: prev.y - e.deltaY
+      y: prev.y - e.deltaY,
     }));
   };
 
@@ -128,22 +179,42 @@ const DrawingApp = () => {
       </div>
 
       {/* Canvas Container */}
-      <div className="absolute inset-0 overflow-hidden bg-white">
+      <div 
+        ref={containerRef}
+        className="absolute inset-0 overflow-hidden bg-white"
+        onMouseDown={startDrawing}
+        onMouseMove={draw}
+        onMouseUp={() => setIsDrawing(false)}
+        onMouseLeave={() => setIsDrawing(false)}
+        onWheel={handleWheel}
+      >
         <div 
           style={{ 
-            transform: `translate(${viewportOffset.x}px, ${viewportOffset.y}px)`,
-            transformOrigin: '0 0'
+            transform: `translate(${viewport.x}px, ${viewport.y}px)`,
+            position: 'absolute',
+            top: 0,
+            left: 0,
           }}
         >
-          <canvas
-            ref={canvasRef}
-            className="cursor-crosshair"
-            onMouseDown={startDrawing}
-            onMouseMove={draw}
-            onMouseUp={stopDrawing}
-            onMouseLeave={stopDrawing}
-            onWheel={handleWheel}
-          />
+          {Array.from(chunks.values()).map(chunk => (
+            <canvas
+              key={`${chunk.x},${chunk.y}`}
+              style={{
+                position: 'absolute',
+                left: `${chunk.x}px`,
+                top: `${chunk.y}px`,
+                pointerEvents: 'none',
+              }}
+              width={CANVAS_SIZE}
+              height={CANVAS_SIZE}
+              ref={node => {
+                if (node) {
+                  const ctx = node.getContext('2d');
+                  ctx.drawImage(chunk.canvas, 0, 0);
+                }
+              }}
+            />
+          ))}
         </div>
       </div>
     </div>
